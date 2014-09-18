@@ -2,7 +2,7 @@
 /*
 Plugin Name: Facebook/Twitter Feed
 Description: A JSON-based feed compiler for Facebook and Twitter. Twitter API v1.1 friendly
-Author: Webspec Design / Ethan Clevenger
+Author: Ethan Clevenger
 */
 
 class Webspec_FBTwit_Mash {
