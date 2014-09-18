@@ -3,14 +3,46 @@
 Plugin Name: Facebook/Twitter Feed
 Description: A JSON-based feed compiler for Facebook and Twitter. Twitter API v1.1 friendly
 Author: Ethan Clevenger
+Version: 2.0.0
 */
 
 class Webspec_FBTwit_Mash {
+	public $_enabledPlatforms = array();
 
 	function __construct() {
 		add_action('admin_menu', array($this, 'fb_twitter_mash_menus'));
 		add_action('admin_init', array($this, 'register_fbtwitsettings'));
 		add_shortcode('fb_twitter_feed', array($this, 'display_social'));
+
+		//Enable the platforms
+		$this->_enablePlatforms();
+	}
+
+	public function _enablePlatforms() {
+		//Facebook
+		if(
+			   get_option('fb_page')
+			&& get_option('fb_app_id')
+			&& get_option('fb_app_secret')
+		) {
+			$this->_enabledPlatforms['facebook'] = true;
+		}
+
+		//Twitter
+		if(
+			   get_option('twit_cons_key')
+			&& get_option('twit_cons_sec')
+			&& get_option('twit_access_token')
+			&& get_option('twit_access_token_secret')
+		) {
+			$this->_enabledPlatforms['twitter'] = true;
+		}
+	}
+	public function enabledPlatforms() {
+		return array_keys($this->_enabledPlatforms);
+	}
+	public function isEnabled($platform) {
+		return isset($this->_enabledPlatforms[$platform]) && $this->_enabledPlatforms[$platform];
 	}
 
 	function register_fbtwitsettings() {
@@ -67,26 +99,12 @@ class Webspec_FBTwit_Mash {
 
 	function display_social($atts) {
 		$atts = shortcode_atts(array('number'=>1), $atts);
+
 		//Twitter
-		require_once('twitteroauth/twitteroauth/twitteroauth.php');
-		$twitterConnection = new TwitterOAuth(
-			get_option('twit_cons_key'),
-			get_option('twit_cons_sec'),
-			get_option('twit_access_token'),
-			get_option('twit_access_token_secret')
-		);
-		$twitterData = $twitterConnection->get('statuses/user_timeline');
+		$twitterData = $this->getResults('twitter');
 		
 		//Facebook
-		$profile_id = get_option('fb_page');
-
-		//App Info, needed for Auth
-		$app_id = get_option('fb_app_id');
-		$app_secret = get_option('fb_app_secret');
-		$fb_token = $this->fetchUrl("https://graph.facebook.com/oauth/access_token?client_id={$app_id}&client_secret={$app_secret}&grant_type=client_credentials");
-		$fb_token = str_replace('access_token=', '', $fb_token);
-		$json_object = $this->fetchUrl("https://graph.facebook.com/{$profile_id}/posts?access_token={$fb_token}");
-		$facebookData = json_decode($json_object);
+		$facebookData = $this->getResults('facebook');
 
 		//Counts
 		$fb_count=0;
@@ -124,6 +142,63 @@ class Webspec_FBTwit_Mash {
 		echo '</ul>';
 	}
 
+
+	//You can get individual platform results be calling $this->getResults('twitter');
+	public function getResults($platform) {
+		//Get the cached results
+		$results = get_transient("fb_twiiter_mash_results_{$platform}");
+
+		//If the results are present, then return them
+		if(false !== $results) {
+			return $results;
+		}
+		//Else they are expired or missing
+		else {
+			$results = array();
+
+			switch($platform) {
+				case 'twitter' :
+					$results = $this->_getResultsTwitter();
+					break;
+				case 'facebook' :
+					$results = $this->_getResultsFacebook();
+					break;
+			}
+
+			//Cache the results for 1 hour
+			set_transient("fb_twiiter_mash_results_{$platform}", $results, 1 * HOUR_IN_SECONDS);
+
+			//Return the results
+			return $results;
+		}
+	}
+	public function _getResultsTwitter() {
+		//Twitter
+		require_once('twitteroauth/twitteroauth/twitteroauth.php');
+		$twitterConnection = new TwitterOAuth(
+			get_option('twit_cons_key'),
+			get_option('twit_cons_sec'),
+			get_option('twit_access_token'),
+			get_option('twit_access_token_secret')
+		);
+
+		return $twitterConnection->get('statuses/user_timeline');
+	}
+	public function _getResultsFacebook() {
+		//Facebook
+		$profile_id = get_option('fb_page');
+
+		//App Info, needed for Auth
+		$app_id = get_option('fb_app_id');
+		$app_secret = get_option('fb_app_secret');
+		$fb_token = $this->fetchUrl("https://graph.facebook.com/oauth/access_token?client_id={$app_id}&client_secret={$app_secret}&grant_type=client_credentials");
+		$fb_token = str_replace('access_token=', '', $fb_token);
+		$json_object = $this->fetchUrl("https://graph.facebook.com/{$profile_id}/posts?access_token={$fb_token}");
+
+		return json_decode($json_object);
+	}
+
+	/* Conversion Methods */
 	function convert_twit_links($feed) {
 		//Find location of @ in feed
 		$feed = str_pad($feed, 3, ' ', STR_PAD_LEFT);   //pad feed     
