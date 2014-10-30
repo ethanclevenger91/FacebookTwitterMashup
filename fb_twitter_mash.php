@@ -3,7 +3,7 @@
 Plugin Name: Facebook/Twitter Feed
 Description: A JSON-based feed compiler for Facebook and Twitter. Twitter API v1.1 friendly
 Author: Ethan Clevenger
-Version: 2.2.1
+Version: 2.2.2
 */
 
 class Webspec_FBTwit_Mash {
@@ -352,8 +352,7 @@ class Webspec_FBTwit_Mash {
 	public function _getUserTwitter() {
 		//Get the cached results
 		$user = get_transient("fb_twitter_mash_twitter_user");
-
-		//If the results are present, then return them
+		//If doesn't exist or expired
 		if($user === false) {
 			require_once('twitteroauth/twitteroauth/twitteroauth.php');
 			$twitterConnection = new TwitterOAuth(
@@ -363,7 +362,7 @@ class Webspec_FBTwit_Mash {
 				get_option('twit_access_token_secret')
 			);
 			$user = $twitterConnection->get('account/settings');
-			set_transient("fb_twitter_mash_twitter_user", base64_encode(maybe_serialize($info)), 1 * HOUR_IN_SECONDS);
+			set_transient("fb_twitter_mash_twitter_user", base64_encode(maybe_serialize($user)), 1 * HOUR_IN_SECONDS);
 		} else {
 			$user = maybe_unserialize(base64_decode($user));
 		}
