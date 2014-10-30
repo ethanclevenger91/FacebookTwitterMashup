@@ -3,7 +3,7 @@
 Plugin Name: Facebook/Twitter Feed
 Description: A JSON-based feed compiler for Facebook and Twitter. Twitter API v1.1 friendly
 Author: Ethan Clevenger
-Version: 2.2.0
+Version: 2.2.1
 */
 
 class Webspec_FBTwit_Mash {
@@ -83,7 +83,7 @@ class Webspec_FBTwit_Mash {
 			<h3>Twitter</h3>
 				
 				<p>API Key: <input type="text" name="twit_cons_key" value="<?php echo get_option('twit_cons_key'); ?>"></p>
-				<p>AIP Secret: <input type="text" name="twit_cons_sec" value="<?php echo get_option('twit_cons_sec'); ?>"></p>
+				<p>API Secret: <input type="text" name="twit_cons_sec" value="<?php echo get_option('twit_cons_sec'); ?>"></p>
 				<p>Access Token: <input type="text" name="twit_access_token" value="<?php echo get_option('twit_access_token'); ?>"></p>
 				<p>Access Token Secret: <input type="text" name="twit_access_token_secret" value="<?php echo get_option('twit_access_token_secret'); ?>"><br><br>
 				For these, go to <a href="http://apps.twitter.com" target="_blank">Twitter's Developer Site</a>, agree to the developer terms, and create an app. The information isn't important. Once created, generate the access token and secret, then grab all four of these and fill them in here.</p>
@@ -149,16 +149,15 @@ class Webspec_FBTwit_Mash {
 			$feedData[$platform]['feed'] = $this->getResults($platform);
 			$feedData[$platform]['count'] = 0;
 		}
-
 		for($i=0; $i<$num; $i++) {
 			$createdDates = array();
 			foreach($feedData as $platform=>$data) {
 				$createdDates[$platform] = $this->getCreated($platform, $feedData[$platform]);
 			}
-			$min = array_keys($createdDates, max($createdDates));
-			switch($min[0]) {
+			$max = array_keys($createdDates, max($createdDates));
+			switch($max[0]) {
 				case 'twitter':
-					$returnArray[] = $this->_getTwitterObject($feedData['twitter']['feed'], $feedData['facebook']['count']);
+					$returnArray[] = $this->_getTwitterObject($feedData['twitter']['feed'], $feedData['twitter']['count']);
 					$feedData['twitter']['count']++;
 					break;
 				case 'facebook':
@@ -259,6 +258,7 @@ class Webspec_FBTwit_Mash {
 
 	public function _getTwitterObject($data, $count) {
 		$return = array();
+		$return['service'] = 'Twitter';
 		$return['dateString'] = $this->_getFormattedDate($data, $count, 'twitter');
 		$return['message'] = $this->convert_twit_links($data[$count]->text);
 		$return['image'] = ($data[$count]->entities->media[0]->media_url != '' ? $data[$count]->entities->media[0]->media_url : '');
@@ -281,6 +281,7 @@ class Webspec_FBTwit_Mash {
 
 	public function _getFacebookObject($data, $count) {
 		$return = array();
+		$return['service'] = 'Facebook';
 		$return['dateString'] = $this->_getFormattedDate($data, $count, 'facebook');
 		$return['message'] = $this->filter_fb_links($data->data[$count]->message);
 		$return['image'] = ($data->data[$count]->picture != '' ? $data->data[$count]->picture : '');
@@ -338,15 +339,22 @@ class Webspec_FBTwit_Mash {
 	}
 
 	public function _getUserTwitter() {
-		require_once('twitteroauth/twitteroauth/twitteroauth.php');
-		$twitterConnection = new TwitterOAuth(
-			get_option('twit_cons_key'),
-			get_option('twit_cons_sec'),
-			get_option('twit_access_token'),
-			get_option('twit_access_token_secret')
-		);
-		$info = $twitterConnection->get('account/settings');
-		return '<a class="user" href="http://www.twitter.com/'.$info->screen_name.'">@'.$info->screen_name.'</a>';
+		//Get the cached results
+		$user = get_transient("fb_twitter_mash_twitter_user");
+
+		//If the results are present, then return them
+		if($user === false) {
+			require_once('twitteroauth/twitteroauth/twitteroauth.php');
+			$twitterConnection = new TwitterOAuth(
+				get_option('twit_cons_key'),
+				get_option('twit_cons_sec'),
+				get_option('twit_access_token'),
+				get_option('twit_access_token_secret')
+			);
+			$user = $twitterConnection->get('account/settings');
+			set_transient("fb_twitter_mash_twitter_user", $info, 1 * HOUR_IN_SECONDS);
+		}
+		return '<a class="user" href="http://www.twitter.com/'.$user->screen_name.'">@'.$user->screen_name.'</a>';
 
 	}
 
