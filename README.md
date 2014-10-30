@@ -29,7 +29,29 @@ The shortcode for displaying a generic list of tweets, posts and associated medi
 
      [fb_twitter_feed number=x]
 
-That simple. Put it anywhere. It gets the combined x most recent tweets/posts
+That simple. Put it anywhere. It gets the combined x most recent tweets/posts.
+
+For more control, you can get a feed object and iterate over the posts:
+
+	$feedGetter = new Webspec_FBTwit_Mash();
+	$feed = $feedGetter->return_social(3);
+	foreach($feed as $post) {
+		//output the good stuff here
+	}
+
+Each post looks like this:
+	
+	$post = array(
+		'service'=>'Facebook', //or Twitter
+		'dateString'=>'1 day ago', //or however you've set your options
+		'message'=>'The content of the post',
+		'image'=> 'http://foo.com/bar.jpg' //a url to the post's attached image, if one exists
+	)
+
+You can also get the Twitter User like so:
+	
+	echo $feedGetter->_getUserTwitter();
+	echo Webspec_FBTwit_Mash::_getUserTwitter(); //also works statically
 
 Features:
 ------------------
@@ -37,3 +59,4 @@ Features:
 - Supports Twitter API v1.1
 - Twitter handles and hashtags are filtered out and linked, as are links in Facebook posts
 - New in 2.1: Use a single service or both!
+- New in 2.2: Get an object rather than HTML

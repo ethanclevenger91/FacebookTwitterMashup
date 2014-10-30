@@ -3,7 +3,7 @@
 Plugin Name: Facebook/Twitter Feed
 Description: A JSON-based feed compiler for Facebook and Twitter. Twitter API v1.1 friendly
 Author: Ethan Clevenger
-Version: 2.1.0
+Version: 2.2.0
 */
 
 class Webspec_FBTwit_Mash {
@@ -53,6 +53,7 @@ class Webspec_FBTwit_Mash {
 		register_setting('fb_twit_feed_options', 'fb_page');
 		register_setting('fb_twit_feed_options', 'fb_app_id');
 		register_setting('fb_twit_feed_options', 'fb_app_secret');
+		register_setting('fb_twit_feed_options', 'ws_date_style');
 	}
 
 	function fb_twitter_mash_menus() {
@@ -65,10 +66,22 @@ class Webspec_FBTwit_Mash {
 			<h2>FB/Twitter Combined Feed</h2>
 			<p>Use the shortcode '[fb_twitter_feed number = x]' where 'x' is the number of posts you'd like displayed</p>
 			<p>Leaving any options below blank will disable the service that option belongs to from appearing in your feed.</p>
-			<h3>Twitter</h3>
 			<form action="options.php" method="post">
 				<?php settings_fields('fb_twit_feed_options'); ?>
 				<?php do_settings_fields('fb_twit_feed_options', ''); ?>
+			<h3>General</h3>
+			<?php $date_style_options = array(
+				'time-since'=>'Time Since Post',
+				'date-posted'=>'Post Date'
+			); ?>
+			<p>Date Style: <select name="ws_date_style">
+					<?php foreach($date_style_options as $option=>$label) { ?>
+						<option value="<?php echo $option; ?>"<?php if($option == get_option('ws_date_style')) echo ' selected'; ?>><?php echo $label; ?></option>
+					<?php } ?>
+					</select>
+				</p>
+			<h3>Twitter</h3>
+				
 				<p>API Key: <input type="text" name="twit_cons_key" value="<?php echo get_option('twit_cons_key'); ?>"></p>
 				<p>AIP Secret: <input type="text" name="twit_cons_sec" value="<?php echo get_option('twit_cons_sec'); ?>"></p>
 				<p>Access Token: <input type="text" name="twit_access_token" value="<?php echo get_option('twit_access_token'); ?>"></p>
@@ -101,7 +114,6 @@ class Webspec_FBTwit_Mash {
 	function display_social($atts) {
 		$atts = shortcode_atts(array('number'=>1), $atts);
 
-		//Twitter
 		$feedData = array();
 		foreach($this->enabledPlatforms() as $platform) {
 			$feedData[$platform]['feed'] = $this->getResults($platform);
@@ -130,8 +142,35 @@ class Webspec_FBTwit_Mash {
 		echo '</ul>';
 	}
 
+	public function return_social($num) {
+		$feedData = array();
+		$returnArray = array();
+		foreach($this->enabledPlatforms() as $platform) {
+			$feedData[$platform]['feed'] = $this->getResults($platform);
+			$feedData[$platform]['count'] = 0;
+		}
 
-	//You can get individual platform results be calling $this->getResults('twitter');
+		for($i=0; $i<$num; $i++) {
+			$createdDates = array();
+			foreach($feedData as $platform=>$data) {
+				$createdDates[$platform] = $this->getCreated($platform, $feedData[$platform]);
+			}
+			$min = array_keys($createdDates, max($createdDates));
+			switch($min[0]) {
+				case 'twitter':
+					$returnArray[] = $this->_getTwitterObject($feedData['twitter']['feed'], $feedData['facebook']['count']);
+					$feedData['twitter']['count']++;
+					break;
+				case 'facebook':
+					$returnArray[] = $this->_getFacebookObject($feedData['facebook']['feed'], $feedData['facebook']['count']);
+					$feedData['facebook']['count']++;
+					break;
+			}
+		}
+		return $returnArray;
+	}
+
+	//You can get individual platform results by calling $this->getResults('twitter');
 	public function getResults($platform) {
 		//Get the cached results
 		$results = get_transient("fb_twitter_mash_results_{$platform}");
@@ -203,21 +242,34 @@ class Webspec_FBTwit_Mash {
 	}
 
 	public function _getOutputTwitter($data, $count) {
-		$output = $this->convert_twit_links($data[$count]->text);
 		$output = '<li class="social_item twitter">
-			<a target="_blank" href="https://twitter.com/'.$data[$count]->user->screen_name.'/status/'.$data[$count]->id_str.'"><h5 class="social_date"><i class="fa fa-twitter-square"></i>'.date('M d, Y', $this->_getCreatedTwitter($data, $count)).'</h5></a>
-			<p class="social_message">'.$output.'</p>';
+			<h5 class="social_date">
+				<a target="_blank" href="https://twitter.com/'.$data[$count]->user->screen_name.'/status/'.$data[$count]->id_str.'">
+					<i class="fa fa-twitter-square"></i>
+					'.$this->_getFormattedDate($data, $count, 'twitter').'
+				</a>
+			</h5>
+			<p class="social_message">'.$this->convert_twit_links($data[$count]->text).'</p>';
 		if($data[$count]->entities->media[0]->media_url != '') { 
 			$output .= '<img class="twit_pic" src="'.$data[$count]->entities->media[0]->media_url.'">'; 
 		}
 		$output .= '</li>';
 		echo $output;
 	}
+
+	public function _getTwitterObject($data, $count) {
+		$return = array();
+		$return['dateString'] = $this->_getFormattedDate($data, $count, 'twitter');
+		$return['message'] = $this->convert_twit_links($data[$count]->text);
+		$return['image'] = ($data[$count]->entities->media[0]->media_url != '' ? $data[$count]->entities->media[0]->media_url : '');
+		return $return;
+	}
+
 	public function _getOutputFacebook($data, $count) {
 		$output = '';
 		if($data->data[$count]->message != NULL || $data->data[$count]->picture != NULL) {
 			$output = '<li class="social_item facebook">
-				<a target="_blank" href="'.$data->data[$count]->link.'"><h5 class="social_date"><i class="fa fa-facebook-square"></i>'.date('M d, Y', $this->_getCreatedFacebook($data, $count)).'</h5></a>
+				<a target="_blank" href="'.$data->data[$count]->link.'"><h5 class="social_date"><i class="fa fa-facebook-square"></i>'.$this->_getFormattedDate($data, $count, 'facebook').'</h5></a>
 				<p class="social_message">'.$this->filter_fb_links($data->data[$count]->message).'</p>';
 			if($data->data[$count]->picture != '') {
 				$output .= '<img class="fb_pic" src="'.$data->data[$count]->picture.'">';
@@ -225,6 +277,77 @@ class Webspec_FBTwit_Mash {
 			$output .= '</li>';
 		}
 		return $output;
+	}
+
+	public function _getFacebookObject($data, $count) {
+		$return = array();
+		$return['dateString'] = $this->_getFormattedDate($data, $count, 'facebook');
+		$return['message'] = $this->filter_fb_links($data->data[$count]->message);
+		$return['image'] = ($data->data[$count]->picture != '' ? $data->data[$count]->picture : '');
+		return $return;
+	}
+
+	public function _getFormattedDate($data, $count, $platform) {
+		$style = get_option('ws_date_style');
+		$output = '';
+		switch($platform) {
+			case 'twitter':
+				switch($style) {
+					case 'time-since':
+						$output = $this->_getTimeAgoString($this->_getCreatedTwitter($data, $count));
+						break;
+					case 'post-date':
+					default:
+						$output = date('M d, Y', $this->_getCreatedTwitter($data, $count));
+						break;
+				}
+				break;
+			case 'facebook':
+				switch($style) {
+					case 'time-since':
+						$output = $this->_getTimeAgoString($this->_getCreatedFacebook($data, $count));
+						break;
+					case 'post-date':
+					default:
+						$output = date('M d, Y', $this->_getCreatedFacebook($data, $count));
+						break;
+				}
+				break;
+		}
+		return $output;
+	}
+
+	/*From SO: http://stackoverflow.com/questions/2915864/php-how-to-find-the-time-elapsed-since-a-date-time
+	Credit @arnorhs: http://stackoverflow.com/users/2038/arnorhs */ 
+	public function _getTimeAgoString($time) {
+		$time = time() - $time; // to get the time since that moment
+	    $tokens = array (
+	        31536000 => 'year',
+	        2592000 => 'month',
+	        604800 => 'week',
+	        86400 => 'day',
+	        3600 => 'hour',
+	        60 => 'minute',
+	        1 => 'second'
+	    );
+	    foreach ($tokens as $unit => $text) {
+	        if ($time < $unit) continue;
+	        $numberOfUnits = floor($time / $unit);
+	        return $numberOfUnits.' '.$text.(($numberOfUnits>1)?'s':'').' ago';
+	    }
+	}
+
+	public function _getUserTwitter() {
+		require_once('twitteroauth/twitteroauth/twitteroauth.php');
+		$twitterConnection = new TwitterOAuth(
+			get_option('twit_cons_key'),
+			get_option('twit_cons_sec'),
+			get_option('twit_access_token'),
+			get_option('twit_access_token_secret')
+		);
+		$info = $twitterConnection->get('account/settings');
+		return '<a class="user" href="http://www.twitter.com/'.$info->screen_name.'">@'.$info->screen_name.'</a>';
+
 	}
 
 	/* Conversion Methods */
