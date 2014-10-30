@@ -176,7 +176,7 @@ class Webspec_FBTwit_Mash {
 
 		//If the results are present, then return them
 		if(false !== $results) {
-			return $results;
+			return maybe_unserialize(base64_decode($results));
 		}
 		//Else they are expired or missing
 		else {
@@ -192,7 +192,7 @@ class Webspec_FBTwit_Mash {
 			}
 
 			//Cache the results for 1 hour
-			set_transient("fb_twitter_mash_results_{$platform}", $results, 1 * HOUR_IN_SECONDS);
+			set_transient("fb_twitter_mash_results_{$platform}", base64_encode(maybe_serialize($results)), 1 * HOUR_IN_SECONDS);
 
 			//Return the results
 			return $results;
@@ -247,8 +247,14 @@ class Webspec_FBTwit_Mash {
 					<i class="fa fa-twitter-square"></i>
 					'.$this->_getFormattedDate($data, $count, 'twitter').'
 				</a>
-			</h5>
-			<p class="social_message">'.$this->convert_twit_links($data[$count]->text).'</p>';
+			</h5>';
+			if(strpos($data[$count]->text, 'RT @') == 0) {
+				preg_match('/^RT @([0-9A-Za-z_]{1,15})/', $data[$count]->text, $rt);
+				$message = $this->convert_twit_links($rt[0].' '.$data[$count]->retweeted_status->text);
+			} else {
+				$message = $this->convert_twit_links($data[$count]->text);
+			}
+			echo '<p class="social_message">'.$message.'</p>';
 		if($data[$count]->entities->media[0]->media_url != '') { 
 			$output .= '<img class="twit_pic" src="'.$data[$count]->entities->media[0]->media_url.'">'; 
 		}
@@ -260,7 +266,12 @@ class Webspec_FBTwit_Mash {
 		$return = array();
 		$return['service'] = 'Twitter';
 		$return['dateString'] = $this->_getFormattedDate($data, $count, 'twitter');
-		$return['message'] = $this->convert_twit_links($data[$count]->text);
+		if(strpos($data[$count]->text, 'RT @') === 0) {
+			preg_match('/^RT @([0-9A-Za-z_]{1,15})/', $data[$count]->text, $rt);
+			$return['message'] = $this->convert_twit_links($rt[0].' '.$data[$count]->retweeted_status->text);
+		} else {
+			$return['message'] = $this->convert_twit_links($data[$count]->text);
+		}
 		$return['image'] = ($data[$count]->entities->media[0]->media_url != '' ? $data[$count]->entities->media[0]->media_url : '');
 		return $return;
 	}
@@ -352,7 +363,9 @@ class Webspec_FBTwit_Mash {
 				get_option('twit_access_token_secret')
 			);
 			$user = $twitterConnection->get('account/settings');
-			set_transient("fb_twitter_mash_twitter_user", $info, 1 * HOUR_IN_SECONDS);
+			set_transient("fb_twitter_mash_twitter_user", base64_encode(maybe_serialize($info)), 1 * HOUR_IN_SECONDS);
+		} else {
+			$user = maybe_unserialize(base64_decode($user));
 		}
 		return '<a class="user" href="http://www.twitter.com/'.$user->screen_name.'">@'.$user->screen_name.'</a>';
 
@@ -373,7 +386,6 @@ class Webspec_FBTwit_Mash {
 	}
 	function filter_fb_links($content) {
 		$reg_exUrl = "/(http|https|ftp|ftps)\:\/\/[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,3}(\/\S*)?/";
-		$url='';
 		if(preg_match($reg_exUrl, $content, $url)) {
 			return preg_replace($reg_exUrl, '<a target="_blank" href="'.$url[0].'">'.$url[0].'</a> ', $content);
 		} else {
