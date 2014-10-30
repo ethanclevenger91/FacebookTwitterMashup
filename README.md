@@ -20,6 +20,8 @@ Facebook:
 
 These can be acquired by making a [Facebook App](http://developers.facebook.com). Note that the account used to generate the app must be able to view the page being queried (not a problem for public pages, which are most of our clients)
 
+Leaving any options blank will disable the service to which that option belongs.
+
 You'll Get
 ------------------
 
@@ -34,3 +36,4 @@ Features:
 
 - Supports Twitter API v1.1
 - Twitter handles and hashtags are filtered out and linked, as are links in Facebook posts
+- New in 2.1: Use a single service or both!

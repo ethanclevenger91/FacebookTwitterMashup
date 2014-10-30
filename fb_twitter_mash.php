@@ -3,7 +3,7 @@
 Plugin Name: Facebook/Twitter Feed
 Description: A JSON-based feed compiler for Facebook and Twitter. Twitter API v1.1 friendly
 Author: Ethan Clevenger
-Version: 2.0.0
+Version: 2.1.0
 */
 
 class Webspec_FBTwit_Mash {
@@ -63,7 +63,8 @@ class Webspec_FBTwit_Mash {
 		<div class="wrap">
 		<?php screen_icon(); ?>
 			<h2>FB/Twitter Combined Feed</h2>
-			<p>Use the shortcode '[ fb_twitter_feed number = "x" ]' where 'x' is the number of posts you'd like displayed</p>
+			<p>Use the shortcode '[fb_twitter_feed number = x]' where 'x' is the number of posts you'd like displayed</p>
+			<p>Leaving any options below blank will disable the service that option belongs to from appearing in your feed.</p>
 			<h3>Twitter</h3>
 			<form action="options.php" method="post">
 				<?php settings_fields('fb_twit_feed_options'); ?>
@@ -72,7 +73,7 @@ class Webspec_FBTwit_Mash {
 				<p>AIP Secret: <input type="text" name="twit_cons_sec" value="<?php echo get_option('twit_cons_sec'); ?>"></p>
 				<p>Access Token: <input type="text" name="twit_access_token" value="<?php echo get_option('twit_access_token'); ?>"></p>
 				<p>Access Token Secret: <input type="text" name="twit_access_token_secret" value="<?php echo get_option('twit_access_token_secret'); ?>"><br><br>
-				For these, go to <a href="http://developer.twitter.com" target="_blank">Twitter's Developer Site</a>, agree to the developer terms, and create an app. The information isn't important. Once created, generate the access token and secret, then grab all four of these and fill them in here.</p>
+				For these, go to <a href="http://apps.twitter.com" target="_blank">Twitter's Developer Site</a>, agree to the developer terms, and create an app. The information isn't important. Once created, generate the access token and secret, then grab all four of these and fill them in here.</p>
 			<h3>Facebook</h3>
 				<p>Page ID: <input type="text" name="fb_page" value="<?php echo get_option('fb_page'); ?>"></p>
 				<p>App ID: <input type="text" name="fb_app_id" value="<?php echo get_option('fb_app_id'); ?>"></p>
@@ -101,42 +102,29 @@ class Webspec_FBTwit_Mash {
 		$atts = shortcode_atts(array('number'=>1), $atts);
 
 		//Twitter
-		$twitterData = $this->getResults('twitter');
-		
-		//Facebook
-		$facebookData = $this->getResults('facebook');
-
-		//Counts
-		$fb_count=0;
-		$twit_count=0;
+		$feedData = array();
+		foreach($this->enabledPlatforms() as $platform) {
+			$feedData[$platform]['feed'] = $this->getResults($platform);
+			$feedData[$platform]['count'] = 0;
+		}
 
 		//GO!
 		echo '<ul class="fb_twit_list">';
 		for($i=0; $i<$atts['number']; $i++) {
-			$twit_date = strtotime($twitterData[$twit_count]->created_at);
-			$fb_date = strtotime($facebookData->data[$fb_count]->created_time);
-			if($fb_date < $twit_date) {
-				$output = $this->convert_twit_links($twitterData[$twit_count]->text);
-				echo '<li class="social_item twitter">';
-				echo '<a target="_blank" href="https://twitter.com/'.$twitterData[$twit_count]->user->screen_name.'/status/'.$twitterData[$twit_count]->id_str.'"><h5 class="social_date"><i class="fa fa-twitter-square"></i>'.date('M d, Y', $twit_date).'</h5></a>';
-				echo '<p class="social_message">'.$output.'</p>';
-				if($twitterData[$twit_count]->entities->media[0]->media_url != '') { 
-					echo '<img class="twit_pic" src="'.$twitterData[$twit_count]->entities->media[0]->media_url.'">'; 
-				}
-				echo '</li>';
-				$twit_count++;
+			$createdDates = array();
+			foreach($feedData as $platform=>$data) {
+				$createdDates[$platform] = $this->getCreated($platform, $feedData[$platform]);
 			}
-			else {
-				if($facebookData->data[$fb_count]->message != NULL || $facebookData->data[$fb_count]->picture != NULL) {
-					echo '<li class="social_item facebook">';
-					echo '<a target="_blank" href="'.$facebookData->data[$fb_count]->link.'"><h5 class="social_date"><i class="fa fa-facebook-square"></i>'.date('M d, Y', $fb_date).'</h5></a>';
-					echo '<p class="social_message">'.$this->filter_fb_links($facebookData->data[$fb_count]->message).'</p>';
-					if($facebookData->data[$fb_count]->picture != '') {
-						echo '<img class="fb_pic" src="'.$facebookData->data[$fb_count]->picture.'">';
-					}
-					echo '</li>';
-				}
-				$fb_count++;
+			$min = array_keys($createdDates, max($createdDates));
+			switch($min[0]) {
+				case 'twitter':
+					echo $this->_getOutputTwitter($feedData['twitter']['feed'], $feedData['twitter']['count']);
+					$feedData['twitter']['count']++;
+					break;
+				case 'facebook':
+					echo $this->_getOutputFacebook($feedData['facebook']['feed'], $feedData['facebook']['count']);
+					$feedData['facebook']['count']++;
+					break;
 			}
 		}
 		echo '</ul>';
@@ -146,7 +134,7 @@ class Webspec_FBTwit_Mash {
 	//You can get individual platform results be calling $this->getResults('twitter');
 	public function getResults($platform) {
 		//Get the cached results
-		$results = get_transient("fb_twiiter_mash_results_{$platform}");
+		$results = get_transient("fb_twitter_mash_results_{$platform}");
 
 		//If the results are present, then return them
 		if(false !== $results) {
@@ -166,11 +154,27 @@ class Webspec_FBTwit_Mash {
 			}
 
 			//Cache the results for 1 hour
-			set_transient("fb_twiiter_mash_results_{$platform}", $results, 1 * HOUR_IN_SECONDS);
+			set_transient("fb_twitter_mash_results_{$platform}", $results, 1 * HOUR_IN_SECONDS);
 
 			//Return the results
 			return $results;
 		}
+	}
+	public function getCreated($platform, $data) {
+		switch($platform) {
+			case 'facebook':
+				return $this->_getCreatedFacebook($data['feed'], $data['count']);
+				break;
+			case 'twitter':
+				return $this->_getCreatedTwitter($data['feed'], $data['count']);
+				break;
+		}
+	}
+	public function _getCreatedFacebook($data, $count) {
+		return strtotime($data->data[$count]->created_time);
+	}
+	public function _getCreatedTwitter($data, $count) {
+		return strtotime($data[$count]->created_at);
 	}
 	public function _getResultsTwitter() {
 		//Twitter
@@ -196,6 +200,31 @@ class Webspec_FBTwit_Mash {
 		$json_object = $this->fetchUrl("https://graph.facebook.com/{$profile_id}/posts?access_token={$fb_token}");
 
 		return json_decode($json_object);
+	}
+
+	public function _getOutputTwitter($data, $count) {
+		$output = $this->convert_twit_links($data[$count]->text);
+		$output = '<li class="social_item twitter">
+			<a target="_blank" href="https://twitter.com/'.$data[$count]->user->screen_name.'/status/'.$data[$count]->id_str.'"><h5 class="social_date"><i class="fa fa-twitter-square"></i>'.date('M d, Y', $this->_getCreatedTwitter($data, $count)).'</h5></a>
+			<p class="social_message">'.$output.'</p>';
+		if($data[$count]->entities->media[0]->media_url != '') { 
+			$output .= '<img class="twit_pic" src="'.$data[$count]->entities->media[0]->media_url.'">'; 
+		}
+		$output .= '</li>';
+		echo $output;
+	}
+	public function _getOutputFacebook($data, $count) {
+		$output = '';
+		if($data->data[$count]->message != NULL || $data->data[$count]->picture != NULL) {
+			$output = '<li class="social_item facebook">
+				<a target="_blank" href="'.$data->data[$count]->link.'"><h5 class="social_date"><i class="fa fa-facebook-square"></i>'.date('M d, Y', $this->_getCreatedFacebook($data, $count)).'</h5></a>
+				<p class="social_message">'.$this->filter_fb_links($data->data[$count]->message).'</p>';
+			if($data->data[$count]->picture != '') {
+				$output .= '<img class="fb_pic" src="'.$data->data[$count]->picture.'">';
+			}
+			$output .= '</li>';
+		}
+		return $output;
 	}
 
 	/* Conversion Methods */
