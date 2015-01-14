@@ -253,7 +253,7 @@ class Webspec_FBTwit_Mash {
 			} else {
 				$message = $this->convert_twit_links($data[$count]->text);
 			}
-			echo '<p class="social_message">'.$message.'</p>';
+			$output .= '<p class="social_message">'.$message.'</p>';
 		if($data[$count]->entities->media[0]->media_url != '') { 
 			$output .= '<img class="twit_pic" src="'.$data[$count]->entities->media[0]->media_url.'">'; 
 		}
