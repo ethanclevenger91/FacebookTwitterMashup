@@ -3,7 +3,7 @@
 Plugin Name: Facebook/Twitter Feed
 Description: A JSON-based feed compiler for Facebook and Twitter. Twitter API v1.1 friendly
 Author: Ethan Clevenger
-Version: 2.2.4
+Version: 2.2.5
 */
 
 class Webspec_FBTwit_Mash {
@@ -247,7 +247,7 @@ class Webspec_FBTwit_Mash {
 					'.$this->_getFormattedDate($data, $count, 'twitter').'
 				</a>
 			</h5>';
-			if(strpos($data[$count]->text, 'RT @') === 0) {
+			if($data[$count]->retweeted) {
 				preg_match('/^RT @([0-9A-Za-z_]{1,15})/', $data[$count]->text, $rt);
 				$message = $this->convert_twit_links($rt[0].' '.$data[$count]->retweeted_status->text);
 			} else {
@@ -378,7 +378,7 @@ class Webspec_FBTwit_Mash {
 		$numat = substr_count($feed, '@');
 		$numhash = substr_count($feed, '#'); 
 		$numhttp = substr_count($feed, 'http'); 
-		$feed = preg_replace("/(http:\/\/)(.*?)\/([\w\.\/\&\=\?\-\,\:\;\#\_\~\%\+]*)/", "<a target=\"_blank\" href=\"\\0\">\\0</a>", $feed);
+		$feed = preg_replace("/(http(s)?:\/\/)(.*?)\/([\w\.\/\&\=\?\-\,\:\;\#\_\~\%\+]*)/", "<a target=\"_blank\" href=\"\\0\">\\0</a>", $feed);
 		$feed = preg_replace("(@([a-zA-Z0-9\_]+))", "<a href=\"http://www.twitter.com/\\1\">\\0</a>", $feed);
 		$feed = preg_replace('/(^|\s)#(\w+)/', '\1<a target="_blank" href="https://twitter.com/search?q=\2&src=typd">#\2</a>', $feed);
 		return $feed;
