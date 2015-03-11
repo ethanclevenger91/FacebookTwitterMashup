@@ -3,7 +3,7 @@
 Plugin Name: Facebook/Twitter Feed
 Description: A JSON-based feed compiler for Facebook and Twitter. Twitter API v1.1 friendly
 Author: Ethan Clevenger
-Version: 2.2.5
+Version: 2.3
 */
 
 class Webspec_FBTwit_Mash {
@@ -273,6 +273,7 @@ class Webspec_FBTwit_Mash {
 			$return['message'] = $this->convert_twit_links($data[$count]->text);
 		}
 		$return['image'] = ($data[$count]->entities->media[0]->media_url != '' ? $data[$count]->entities->media[0]->media_url : '');
+		$return['link'] = 'https://twitter.com/'.$data[$count]->user->screen_name.'/status/'.$data[$count]->id_str;
 		return $return;
 	}
 
@@ -296,6 +297,7 @@ class Webspec_FBTwit_Mash {
 		$return['dateString'] = $this->_getFormattedDate($data, $count, 'facebook');
 		$return['message'] = $this->filter_fb_links($data->data[$count]->message);
 		$return['image'] = ($data->data[$count]->picture != '' ? $data->data[$count]->picture : '');
+		$return['link'] = $data->data[$count]->link;
 		return $return;
 	}
 
